@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>FHIR-based EMR</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <style>
+    .form-label { font-weight: 500; color: #333; }
+    body { background: linear-gradient(90deg, #007bff, #00c6ff); padding-bottom: 50px; }
+    .card { border-radius: 15px; box-shadow: 0 5px 15px rgba(0,0,0,0.08); }
+    h2 { font-weight: 700; color: #007bff; }
+    pre { background: #e9ecef; padding: 15px; border-radius: 10px; overflow-x: auto; max-height: 450px; }
+    #patientSuggestions { position: absolute; z-index: 1000; width: 100%; max-height: 200px; overflow-y: auto; }
+    #patientSuggestions .list-group-item { cursor: pointer; }
+  </style>
+</head>
+<body>
+  <div class="mb-3">
+    <a href="dashboard.html" class="btn btn-primary">&larr; Back to Dashboard</a>
+  </div>
+
+  <div class="container mt-5">
+    <div class="card p-4">
+      <h2 class="mb-4">🌐 FHIR EMR Document</h2>
+
+      <!-- Patient autocomplete -->
+      <div class="mb-3 position-relative">
+        <label class="form-label">Select Patient</label>
+        <input type="text" id="patientInput" class="form-control" placeholder="Type patient name or ID" />
+        <div id="patientSuggestions" class="list-group mt-1"></div>
+      </div>
+
+      <div class="mt-4">
+        <h5>FHIR JSON Bundle</h5>
+        <pre id="fhirOutput">{}</pre>
+      </div>
+
+      <button class="btn btn-success mt-3" id="exportBtn">Export JSON</button>
+      <button class="btn btn-primary mt-3 ms-2" id="pdfBtn">Download PDF</button>
+    </div>
+  </div>
+
+<script >
+const { jsPDF } = window.jspdf;
+
+let patients = [];
+let medicalHistories = [];
+let clinicalReports = [];
+let labReports = [];
+let prescriptions = [];
+
+
+const patientInput = document.getElementById("patientInput");
+const patientSuggestions = document.getElementById("patientSuggestions");
+const fhirOutput = document.getElementById("fhirOutput");
+const exportBtn = document.getElementById("exportBtn");
+const pdfBtn = document.getElementById("pdfBtn");
+
+let selectedPatientId = null;
+let timeout;
+
+const API_BASE = "http://localhost:8080";
+
+// --- 1. Load patients list on page load ---
+async function loadPatients() {
+  try {
+    patients = await (await fetch(`${API_BASE}/api/patients`)).json();
+  } catch (err) {
+    console.error("Error loading patients:", err);
+    alert("Failed to load patients list. Check backend and CORS.");
+  }
+}
+
+loadPatients();
+
+// --- 2. Fetch all patient-specific data ---
+async function loadPatientData(patientId) {
+  try {
+    const medHistData = await (await fetch(`${API_BASE}/api/med-history/${patientId}`)).json();
+    medicalHistories = Array.isArray(medHistData) ? medHistData : medHistData ? [medHistData] : [];
+
+    const clinicalData = await (await fetch(`${API_BASE}/api/clinical-reports/${patientId}`)).json();
+    clinicalReports = Array.isArray(clinicalData) ? clinicalData : clinicalData ? [clinicalData] : [];
+
+    const labData = await (await fetch(`${API_BASE}/api/lab-reports/${patientId}`)).json();
+    labReports = Array.isArray(labData) ? labData : labData ? [labData] : [];
+
+    const prescriptionData = await (await fetch(`${API_BASE}/api/prescriptions/${patientId}`)).json();
+    prescriptions = Array.isArray(prescriptionData) ? prescriptionData : prescriptionData ? [prescriptionData] : [];
+
+  } catch (err) {
+    console.error("Error loading patient-specific data:", err);
+    alert("Failed to load some data for this patient.");
+  }
+}
+
+
+// --- 3. Patient autocomplete ---
+patientInput.addEventListener("input", () => {
+  clearTimeout(timeout);
+  const query = patientInput.value.trim().toLowerCase();
+  selectedPatientId = null;
+
+  if (!query) {
+    patientSuggestions.innerHTML = "";
+    fhirOutput.textContent = "{}";
+    return;
+  }
+
+  timeout = setTimeout(() => {
+    const filtered = patients.filter(p =>
+      `${p.firstName} ${p.lastName}`.toLowerCase().includes(query) ||
+      p.patientId.toLowerCase().includes(query)
+    );
+
+    patientSuggestions.innerHTML = "";
+    filtered.forEach(p => {
+      const div = document.createElement("div");
+      div.className = "list-group-item list-group-item-action";
+      div.textContent = `${p.firstName} ${p.lastName} (${p.patientId})`;
+      div.addEventListener("click", async () => {
+        patientInput.value = `${p.firstName} ${p.lastName} (${p.patientId})`;
+        selectedPatientId = p.patientId;
+        patientSuggestions.innerHTML = "";
+
+        // Fetch patient-specific data
+        await loadPatientData(selectedPatientId);
+
+        displayFHIRBundle(selectedPatientId);
+      });
+      patientSuggestions.appendChild(div);
+    });
+  }, 200);
+});
+
+document.addEventListener("click", e => {
+  if (!patientInput.contains(e.target) && !patientSuggestions.contains(e.target)) {
+    patientSuggestions.innerHTML = "";
+  }
+});
+
+// --- 4. Build FHIR bundle ---
+function buildFHIRBundle(patientId) {
+  const patient = patients.find(p => p.patientId === patientId);
+  if (!patient) return null;
+
+  const patientResource = {
+    resourceType: "Patient",
+    id: patient.patientId,
+    name: [{ given: [patient.firstName], family: patient.lastName }],
+    gender: patient.gender,
+    birthDate: patient.dob,
+    telecom: [
+      ...(patient.phone ? [{ system: "phone", value: patient.phone }] : []),
+      ...(patient.email ? [{ system: "email", value: patient.email }] : [])
+    ],
+    address: patient.address ? [{ text: patient.address }] : []
+  };
+
+ const history = Array.isArray(medicalHistories) ? medicalHistories.find(h => h.patientId === patientId) : null;
+
+  const conditionResource = history ? {
+    resourceType: "Condition",
+    subject: { reference: `Patient/${patient.patientId}` },
+    detail: history.pastIllnesses,
+    note: [
+      ...(history.allergies ? [{ text: `Allergies: ${history.allergies}` }] : []),
+      ...(history.familyHistory ? [{ text: `Family History: ${history.familyHistory}` }] : []),
+      ...(history.socialHistory ? [{ text: `Social History: ${history.socialHistory}` }] : []),
+      ...(history.immunizations ? [{ text: `Immunizations: ${history.immunizations}` }] : [])
+    ]
+  } : null;
+
+  const observations = clinicalReports.map(r => ({
+    resourceType: "Observation",
+    subject: { reference: `Patient/${patient.patientId}` },
+    code: { text: r.diagnosis, coding: [{ system: "ICD-11", code: r.icdCode }] },
+    note: r.notes ? [{ text: r.notes }] : [],
+    extension: r.treatment ? [{ url: "http://hl7.org/fhir/StructureDefinition/treatment", valueString: r.treatment }] : []
+  }));
+
+  const diagnosticReports = labReports.map(lab => ({
+    resourceType: "DiagnosticReport",
+    subject: { reference: `Patient/${patient.patientId}` },
+    effectiveDateTime: lab.date || new Date().toISOString(),
+    code: { text: lab.testName },
+    performer: lab.labName ? [{ display: lab.labName }] : [],
+    result: [{
+      resourceType: "Observation",
+      code: { text: lab.testName },
+      valueString: lab.result,
+      referenceRange: lab.referenceRange ? [{ text: lab.referenceRange }] : [],
+      unit: lab.units || ""
+    }]
+  }));
+
+  const medicationRequests = [];
+  prescriptions.forEach(pr => {
+    pr.medicines.forEach(med => {
+      const clinical = clinicalReports.find(cr => cr.diagnosis.toLowerCase().includes(med.name.toLowerCase()));
+      medicationRequests.push({
+        resourceType: "MedicationRequest",
+        subject: { reference: `Patient/${patientId}` },
+        medicationCodeableConcept: { text: med.name },
+        dosageInstruction: clinical && clinical.treatment ? [{ text: clinical.treatment }] : [{ text: `${med.dose}, ${med.freq}, ${med.duration}` }],
+        intent: "order",
+        status: "active"
+      });
+    });
+  });
+
+  
+
+  const entries = [
+    { resource: patientResource },
+    ...(conditionResource ? [{ resource: conditionResource }] : []),
+    ...observations.map(r => ({ resource: r })),
+    ...diagnosticReports.map(r => ({ resource: r })),
+    ...medicationRequests.map(r => ({ resource: r })),
+
+  ];
+
+  return { resourceType: "Bundle", type: "collection", entry: entries };
+}
+
+// --- 5. Display FHIR JSON ---
+function displayFHIRBundle(patientId) {
+  const bundle = buildFHIRBundle(patientId);
+  fhirOutput.textContent = bundle ? JSON.stringify(bundle, null, 2) : "{}";
+}
+
+// --- 6. Export JSON ---
+exportBtn.addEventListener("click", () => {
+  if (!selectedPatientId) return alert("Select a patient first.");
+  const bundle = buildFHIRBundle(selectedPatientId);
+  if (!bundle) return alert("No data available.");
+  const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: "application/json" });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = `FHIR_EMR_${selectedPatientId}.json`;
+  link.click();
+});
+pdfBtn.addEventListener("click", () => {
+  if (!selectedPatientId) return alert("Select a patient first.");
+  const bundle = buildFHIRBundle(selectedPatientId);
+  if (!bundle) return alert("No data available.");
+
+  const patient = patients.find(p => p.patientId === selectedPatientId);
+  const doc = new jsPDF();
+  const pageHeight = 280; 
+  let y = 20;
+
+  function addText(text, x = 20, fontSize = 12, fontStyle = "normal") {
+
+
+    doc.setFontSize(fontSize);
+    doc.setFont(undefined, fontStyle);
+    const lines = doc.splitTextToSize(text, 170);
+    lines.forEach(line => {
+      if (y > pageHeight) {
+        doc.addPage();
+        y = 20;
+      }
+      doc.text(line, x, y);
+      y += fontSize * 0.6; // dynamic spacing based on font size
+    });
+  }
+
+  // --- Header ---
+  addText(" Patient EMR Report", 20, 18, "bold");
+  y += 5;
+
+  // --- Patient Info ---
+  addText(`Name: ${patient.firstName} ${patient.lastName}`, 20, 14, "bold");
+  addText(`DOB: ${patient.dob}`, 20);
+  addText(`Gender: ${patient.gender}`, 20);
+  y += 3;
+
+  // --- Medical History ---
+  const mh = medicalHistories.find(h => h.patientId === patient.patientId);
+  if (mh) {
+    addText("Medical History:", 20, 14, "bold");
+    addText(`Past Illnesses: ${mh.pastIllnesses || '-'}`, 25);
+    addText(`Surgeries: ${mh.surgeries || '-'}`, 25);
+    addText(`Allergies: ${mh.allergies || '-'}`, 25);
+    addText(`Family History: ${mh.familyHistory || '-'}`, 25);
+    addText(`Social History: ${mh.socialHistory || '-'}`, 25);
+    addText(`Immunizations: ${mh.immunizations || '-'}`, 25);
+    y += 3;
+  }
+
+  // --- Clinical Reports ---
+  if (clinicalReports.length > 0) {
+    addText("Clinical Reports:", 20, 14, "bold");
+    clinicalReports.forEach((cr, idx) => {
+      addText(`${idx+1}. Diagnosis: ${cr.diagnosis} (ICD-11: ${cr.icdCode || '-'})`, 25, 12, "bold");
+      addText(`Notes: ${cr.notes || '-'}`, 30);
+      addText(`Treatment: ${cr.treatment || '-'}`, 30);
+    });
+    y += 3;
+  }
+
+  // --- Lab Reports ---
+  if (labReports.length > 0) {
+    addText("Lab Reports:", 20, 14, "bold");
+    labReports.forEach((lab, idx) => {
+      addText(`${idx+1}. Test: ${lab.testName} | Result: ${lab.result || '-'} | Ref: ${lab.referenceRange || '-'} | Units: ${lab.units || '-'}`, 25);
+    });
+    y += 3;
+  }
+
+  // --- Prescriptions ---
+  if (prescriptions.length > 0) {
+    addText("Prescriptions:", 20, 14, "bold");
+    prescriptions.forEach((pr, idx) => {
+      addText(`${idx+1}. Visit Date: ${pr.visitDate || '-'}`, 25, 12, "bold");
+      pr.medicines.forEach(med => {
+        addText(`- ${med.name}, ${med.dose}, ${med.freq}, ${med.duration}`, 30);
+      });
+      if (pr.notes) addText(`Notes: ${pr.notes}`, 30);
+    });
+    y += 3;
+  }
+
+  // --- Save PDF ---
+  doc.save(`${patient.firstName}_${patient.lastName}_EMR.pdf`);
+});
+
+</script>
+</body>
+</html>
