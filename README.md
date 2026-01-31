@@ -24,7 +24,7 @@ A key feature of this system is the **unique disease identity number** for every
 ### Backend
 Clone the repository:  
 ```bash
-git clone https://github.com/Jerine-Ebenezer/emr_system.git
+git clone https://github.com/Jerine-Ebenezer/emr.git
 mvn clean install
 mvn spring-boot:run
 
