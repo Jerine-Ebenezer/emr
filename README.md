@@ -2,7 +2,7 @@
 
 The EMR System is a web application designed to **digitally manage patient medical records** and streamline healthcare processes. It allows healthcare providers to add patients, record medical history, write diagnoses, create prescriptions, and maintain an overview of patient diseases.
 
-A key feature of this system is the **unique disease identity number** for every diagnosed disease. This unique ID helps patients who have health insurance **easily claim benefits**, and it also facilitates reporting to government authorities through the **FCIR (Full Case Information Report)** document.
+A key feature of this system is the **unique disease identity number** for every diagnosed disease. This unique ID helps patients who have health insurance **easily claim benefits**, and it also facilitates reporting to government authorities through the **FHIR** document.
 
 ## Features
 - Add and manage patients
@@ -25,7 +25,6 @@ A key feature of this system is the **unique disease identity number** for every
 Clone the repository:  
 ```bash
 git clone https://github.com/Jerine-Ebenezer/emr_system.git
-cd emr_system
 mvn clean install
 mvn spring-boot:run
-cd frontend
+
