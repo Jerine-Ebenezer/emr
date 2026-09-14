@@ -243,8 +243,14 @@ textarea:focus {
         if(!res.ok){
           const errorData = await res.json().catch(() => null);
         throw new Error(errorData?.message || "Failed to add/update patient");
-       
+
         }
+        alert(editId !== null ? "Patient updated successfully!" : "Patient saved successfully!");
+        if (editId === null) {
+    form.reset();
+    updatePatientIdField();
+}
+
          editId = null;
          
       }catch(err){
