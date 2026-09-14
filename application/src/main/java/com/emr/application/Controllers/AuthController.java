@@ -7,7 +7,9 @@ import org.springframework.web.bind.annotation.*;
 //@CrossOrigin(origins = "http://127.0.0.1:5500")
 @CrossOrigin(origins = {
         "http://127.0.0.1:5500",
-        "https://emr-amber-beta.vercel.app"
+        "https://emr-amber-beta.vercel.app",
+        "https://emr-pxjzewzl0-jer20.vercel.app",
+
 })
 @RestController
 @RequestMapping("/api/auth")
