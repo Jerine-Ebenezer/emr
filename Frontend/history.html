@@ -115,8 +115,10 @@
 
 <script>
 
-const API_BASE = "http://localhost:8080";
+//const API_BASE = "http://localhost:8080";
+const API_BASE = "https://emr-backend-ni58.onrender.com";
 const PATIENTS_API = `${API_BASE}/api/patients`;
+
 const SAVE_HISTORY_API = `${API_BASE}/api/medical-history`;
 const LOAD_HISTORY_BY_CODE = code => `${API_BASE}/show/medHistory/${encodeURIComponent(code)}`;
 
@@ -146,7 +148,8 @@ function showAlert(type, msg, dismissAfter=4000) {
 // load patients once at startup
 async function loadPatients() {
   try {
-    const res = await fetch(`http://localhost:8080/api/patients`);
+   // const res = await fetch(`http://localhost:8080/api/patients`);
+    const res = await fetch(`${API_BASE}/api/patients`);
     if (!res.ok) throw new Error("status " + res.status);
     patients = await res.json();
   } catch (err) {
@@ -238,7 +241,8 @@ loadHistoryBtn.addEventListener("click", async () => {
   const code = selectedPatientCode.value || patientInput.value.trim();
   if (!code) return showAlert("warning", "Select a patient (by picking from suggestions) before loading history.");
   try {
-    const res = await fetch(`http://localhost:8080/show/medHistory/{code}`);
+    //const res = await fetch(`http://localhost:8080/show/medHistory/{code}`);
+    const res = await fetch(LOAD_HISTORY_BY_CODE(code));
     if (res.status === 404) {
       showAlert("info", "No medical history found for " + code);
       // clear form while keeping selection
@@ -294,7 +298,8 @@ historyForm.addEventListener("submit", async (e) => {
 
 
   try {
-    const res = await fetch(`http://localhost:8080/api/med-history`, {
+  //const res = await fetch(`http://localhost:8080/api/med-history`, {
+  const res = await fetch(`${API_BASE}/api/med-history`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload)
