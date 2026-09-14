@@ -4,7 +4,11 @@ import com.emr.application.Repositories.DoctorRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
-@CrossOrigin(origins = "http://127.0.0.1:5500")
+//@CrossOrigin(origins = "http://127.0.0.1:5500")
+@CrossOrigin(origins = {
+        "http://127.0.0.1:5500",
+        "https://emr-amber-beta.vercel.app"
+})
 @RestController
 @RequestMapping("/api/auth")
 public class AuthController {
