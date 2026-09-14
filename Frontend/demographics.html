@@ -262,11 +262,23 @@ textarea:focus {
     }
 
     // Initialize Patient ID input with next ID
-    function updatePatientIdField() {
-      const nextId = generatePatientId(patients.length + 1);
-      document.getElementById("patientId").value = nextId;
-    }
+<!--    function updatePatientIdField() {-->
+<!--      const nextId = generatePatientId(patients.length + 1);-->
+<!--      document.getElementById("patientId").value = nextId;-->
+<!--    }-->
+    async function updatePatientIdField() {
+  try {
+    const res = await fetch(`${BASE_URL}/api/patients`);
+    const existingPatients = await res.json();
 
+    const nextId = generatePatientId(existingPatients.length + 1);
+
+    document.getElementById("patientId").value = nextId;
+  } catch (err) {
+    console.error("Error fetching patients:", err);
+    document.getElementById("patientId").value = "P001";
+  }
+}
     // Calculate age from DOB on change
     document.getElementById("dob").addEventListener("change", function () {
       const dob = new Date(this.value);
@@ -278,40 +290,7 @@ textarea:focus {
     // Update Patient ID field on page load
     updatePatientIdField();
 
-    form.addEventListener("submit", function (e) {
-      e.preventDefault();
 
-      const patient = {
-        patientId: document.getElementById("patientId").value,
-        firstName: document.getElementById("firstName").value.trim(),
-        lastName: document.getElementById("lastName").value.trim(),
-        dob: document.getElementById("dob").value,
-        age: document.getElementById("age").value,
-        gender: document.getElementById("gender").value,
-        bloodGroup: document.getElementById("bloodGroup").value,
-        phone: document.getElementById("phone").value.trim(),
-        email: document.getElementById("email").value.trim(),
-        address: document.getElementById("address").value.trim(),
-        maritalStatus: document.getElementById("maritalStatus").value,
-        occupation: document.getElementById("occupation").value.trim(),
-        nationality: document.getElementById("nationality").value.trim(),
-        emergencyName: document.getElementById("emergencyName").value.trim(),
-        emergencyRelation: document.getElementById("emergencyRelation").value.trim(),
-        emergencyPhone: document.getElementById("emergencyPhone").value.trim(),
-        abhaId: document.getElementById("abhaId").value.trim(), // ✅ New ABHA ID field
-        insurance: document.getElementById("insurance").value.trim(),
-        policyId: document.getElementById("policyId").value.trim()
-      };
-
-      // Add patient
-      patients.push(patient);
-
-      // Reset form and update Patient ID for next entry
-      form.reset();
-      updatePatientIdField();
-
-     
-    });
   </script>
 </body>
 </html>
