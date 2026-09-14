@@ -222,30 +222,38 @@ clinicalForm.addEventListener("submit", async e => {
   }
 });
 
-/*Load previous clinical reports
+
+    // Load previous clinical reports
 async function loadPreviousReports(patientCode) {
   previousReportsDiv.innerHTML = "";
+
   try {
-  //await fetch(`http://localhost:8080/api/clinical-reports/${patientCode}`);
-    const res = await fetch(`https://emr-backend-ni58.onrender.com/api/clinical-reports?patientCode=${selectedPatient.patientId}`, {
+    const res = await fetch(
+      `https://emr-backend-ni58.onrender.com/api/clinical-reports?patientCode=${encodeURIComponent(patientCode)}`
+    );
+
     const reports = await res.json();
+
     if (reports.length === 0) return;
 
     reports.forEach(r => {
       const div = document.createElement("div");
       div.className = "section-card";
+
       div.innerHTML = `
         <h5>Visit Date: ${r.visitDate}</h5>
         <p><b>Diagnosis:</b> ${r.diagnosis} (${r.icdCode})</p>
         <p><b>Notes:</b> ${r.notes || '-'}</p>
         <p><b>Treatment:</b> ${r.treatment || '-'}</p>
       `;
+
       previousReportsDiv.appendChild(div);
     });
+
   } catch (err) {
-    console.error(err);
+    console.error("Failed to load previous reports:", err);
   }
-}*/
+}
 </script>
 
 </body>
